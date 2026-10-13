@@ -1,0 +1,8 @@
+prefix=/home/zjh/Linux_robot_arm/devel
+
+Name: arm_bringup
+Description: Description of arm_bringup
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

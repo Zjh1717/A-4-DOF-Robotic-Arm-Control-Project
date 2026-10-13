@@ -1,0 +1,34 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/control_base.h
+vector
+-
+array
+-
+
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/serial_driver.h
+string
+-
+vector
+-
+cstdint
+-
+
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/servo_driver.h
+arm_driver/control_base.h
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/arm_driver/control_base.h
+arm_driver/serial_driver.h
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/arm_driver/serial_driver.h
+memory
+-
+
+/home/zjh/Linux_robot_arm/src/arm_driver/src/servo_driver.cpp
+arm_driver/servo_driver.h
+/home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver/servo_driver.h
+

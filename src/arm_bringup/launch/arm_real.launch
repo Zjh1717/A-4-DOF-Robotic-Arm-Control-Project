@@ -1,0 +1,36 @@
+<launch>
+  <!-- 1. 加载URDF模型 -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro $(find arm_description)/urdf/arm.urdf.xacro"/>
+
+  <!-- 2. 机器人状态发布 -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher"
+        type="robot_state_publisher"/>
+  <node name="joint_state_publisher" pkg="joint_state_publisher"
+        type="joint_state_publisher"/>
+
+  <!-- 3. 硬件驱动 -->
+  <node name="arm_driver" pkg="arm_driver" type="arm_driver_node"
+        output="screen">
+    <rosparam file="$(find arm_driver)/config/servo_config.yaml"
+              command="load"/>
+  </node>
+
+  <!-- 4. 卡尔曼滤波状态估计 -->
+  <node name="state_estimator" pkg="arm_state_estimator"
+        type="state_estimator_node" output="screen">
+    <rosparam file="$(find arm_state_estimator)/config/kalman_params.yaml"
+              command="load"/>
+  </node>
+
+  <!-- 5. MPC控制器 -->
+  <node name="mpc_controller" pkg="arm_controller"
+        type="mpc_controller_node" output="screen">
+    <rosparam file="$(find arm_controller)/config/mpc_params.yaml"
+              command="load"/>
+  </node>
+
+  <!-- 6. RViz可视化 -->
+  <node name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find arm_description)/rviz/arm_display.rviz"/>
+</launch>
