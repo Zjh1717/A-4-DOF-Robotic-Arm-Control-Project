@@ -25,7 +25,21 @@ arm_driver/control_base.h
 /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/arm_driver/control_base.h
 arm_driver/serial_driver.h
 /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/arm_driver/serial_driver.h
+arm_driver/servo_protocol.h
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/arm_driver/servo_protocol.h
+array
+-
 memory
+-
+string
+-
+
+/home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/servo_protocol.h
+array
+-
+cmath
+-
+string
 -
 
 /home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver_node.cpp
@@ -35,10 +49,16 @@ sensor_msgs/JointState.h
 -
 std_msgs/Float64MultiArray.h
 -
+array
+-
+string
+-
+vector
+-
 arm_driver/servo_driver.h
 /home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver/servo_driver.h
-arm_driver/control_base.h
-/home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver/control_base.h
+arm_driver/servo_protocol.h
+/home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver/servo_protocol.h
 
 /opt/ros/noetic/include/ros/advertise_options.h
 ros/forwards.h

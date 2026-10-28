@@ -6,21 +6,23 @@
 
 #IncludeRegexTransform: 
 
-/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/mpc_solver.h
-array
+/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/arm_kinematics.h
+Eigen/Dense
+-
+map
+-
+string
 -
 vector
 -
-Eigen/Dense
--
 
 /home/zjh/Linux_robot_arm/src/arm_controller/src/arm_kinematics.cpp
-
-/home/zjh/Linux_robot_arm/src/arm_controller/src/mpc_solver.cpp
-arm_controller/mpc_solver.h
-/home/zjh/Linux_robot_arm/src/arm_controller/src/arm_controller/mpc_solver.h
-
-/home/zjh/Linux_robot_arm/src/arm_controller/src/trajectory_handler.cpp
+arm_controller/arm_kinematics.h
+/home/zjh/Linux_robot_arm/src/arm_controller/src/arm_controller/arm_kinematics.h
+cmath
+-
+sstream
+-
 
 /usr/include/eigen3/Eigen/Cholesky
 Core

@@ -1,0 +1,7 @@
+<launch>
+  <node name="state_estimator" pkg="arm_state_estimator"
+        type="state_estimator_node" output="screen">
+    <rosparam file="$(find arm_state_estimator)/config/kalman_params.yaml"
+              command="load"/>
+  </node>
+</launch>

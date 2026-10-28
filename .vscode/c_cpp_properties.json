@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/zjh/Linux_robot_arm/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/zjh/Linux_robot_arm/src/arm_controller/include/**",
+        "/home/zjh/Linux_robot_arm/src/arm_driver/include/**",
+        "/home/zjh/Linux_robot_arm/src/arm_state_estimator/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

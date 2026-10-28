@@ -5,7 +5,7 @@ find_package(catkin REQUIRED)
 
 catkin_package()
 
-# 安装资源目录到 install space
-install(DIRECTORY urdf meshes launch rviz
+# 安装资源目录到 install space（仅安装实际存在的目录）
+install(DIRECTORY urdf rviz
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

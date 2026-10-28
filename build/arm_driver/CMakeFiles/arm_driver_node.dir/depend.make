@@ -4,6 +4,7 @@
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/control_base.h
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/serial_driver.h
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/servo_driver.h
+arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /home/zjh/Linux_robot_arm/src/arm_driver/include/arm_driver/servo_protocol.h
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /home/zjh/Linux_robot_arm/src/arm_driver/src/arm_driver_node.cpp
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /opt/ros/noetic/include/ros/advertise_options.h
 arm_driver/CMakeFiles/arm_driver_node.dir/src/arm_driver_node.cpp.o: /opt/ros/noetic/include/ros/advertise_service_options.h

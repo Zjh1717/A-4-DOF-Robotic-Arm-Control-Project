@@ -6,16 +6,34 @@
 
 #IncludeRegexTransform: 
 
-/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/mpc_solver.h
-array
+/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/arm_kinematics.h
+Eigen/Dense
+-
+map
+-
+string
 -
 vector
 -
+
+/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/mpc_solver.h
 Eigen/Dense
+-
+vector
+-
+
+/home/zjh/Linux_robot_arm/src/arm_controller/include/arm_controller/trajectory_handler.h
+Eigen/Dense
+-
+trajectory_msgs/JointTrajectory.h
+-
+vector
 -
 
 /home/zjh/Linux_robot_arm/src/arm_controller/src/mpc_controller_node.cpp
 ros/ros.h
+-
+XmlRpcValue.h
 -
 sensor_msgs/JointState.h
 -
@@ -23,8 +41,18 @@ std_msgs/Float64MultiArray.h
 -
 trajectory_msgs/JointTrajectory.h
 -
+fstream
+-
+sstream
+-
+vector
+-
+arm_controller/arm_kinematics.h
+/home/zjh/Linux_robot_arm/src/arm_controller/src/arm_controller/arm_kinematics.h
 arm_controller/mpc_solver.h
 /home/zjh/Linux_robot_arm/src/arm_controller/src/arm_controller/mpc_solver.h
+arm_controller/trajectory_handler.h
+/home/zjh/Linux_robot_arm/src/arm_controller/src/arm_controller/trajectory_handler.h
 
 /opt/ros/noetic/include/ros/advertise_options.h
 ros/forwards.h

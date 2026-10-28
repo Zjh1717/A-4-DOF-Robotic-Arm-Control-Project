@@ -12,7 +12,7 @@ if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
     string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
            CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
   else()
-    set(CMAKE_INSTALL_CONFIG_NAME "")
+    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
   endif()
   message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
 endif()
@@ -55,8 +55,6 @@ endif()
 if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_COMPONENT)
   file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/arm_description" TYPE DIRECTORY FILES
     "/home/zjh/Linux_robot_arm/src/arm_description/urdf"
-    "/home/zjh/Linux_robot_arm/src/arm_description/meshes"
-    "/home/zjh/Linux_robot_arm/src/arm_description/launch"
     "/home/zjh/Linux_robot_arm/src/arm_description/rviz"
     )
 endif()

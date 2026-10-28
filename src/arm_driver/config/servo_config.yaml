@@ -1,0 +1,12 @@
+# arm_driver REPL 串口驱动参数（MicroPython REPL，依据 python_sdk.py）
+port: "/dev/ttyUSB0"
+baudrate: 115200
+read_timeout_ms: 1000
+read_rate_hz: 50.0
+# arm.bundle.move(...) 的 speed 参数（固件单位未在 SDK 中明确，按 demo 常用值）。
+# TODO: 真机标定 speed 与 rad/s 的映射关系。
+move_speed: 30
+joint_names: ["joint1", "joint2", "joint3", "joint4", "tool_fixed"]
+# 肩关节（joint2）固件零位 -> URDF 零位偏移（度）。固件零位=竖直向上，
+# URDF 零位=水平向前，故取 -90°。若真机姿态相反，翻转此值即可。
+joint2_offset_deg: -90.0

@@ -1,0 +1,3 @@
+# 运动学来源：优先读取 launch 中加载的 /robot_description 参数。
+# 若该参数不存在，可用下面的文件路径兜底（路径需在 launch 中用 $(find) 展开）。
+urdf_file: ""

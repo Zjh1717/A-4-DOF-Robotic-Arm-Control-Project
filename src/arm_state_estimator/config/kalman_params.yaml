@@ -1,0 +1,9 @@
+# arm_state_estimator 参数
+dt: 0.02                    # 估计周期 [s]，对应 50 Hz
+num_kinematic_joints: 4     # 运动学关节数（底座/肩/肘/腕）
+num_joints: 5               # 含夹爪
+joint_names: ["joint1", "joint2", "joint3", "joint4", "tool_fixed"]
+# 一阶带速度卡尔曼滤波的过程/测量噪声（占位初值，需真机标定）
+process_noise_pos: 1.0e-4
+process_noise_vel: 1.0e-3
+measurement_noise: 1.0e-3
