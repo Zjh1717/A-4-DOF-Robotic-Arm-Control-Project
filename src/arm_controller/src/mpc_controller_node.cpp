@@ -28,7 +28,21 @@ bool loadVectorParam(ros::NodeHandle& nh, const std::string& key,
     }
     out.clear();
     for (int i = 0; i < v.size(); ++i) {
-        out.push_back(static_cast<double>(v[i]));
+        // XmlRpcValue 的类型访问器在类型不匹配时会抛异常：YAML 整数会解析成
+        // TypeInt，而 static_cast<double> 只接受 TypeDouble，必须按实际类型转换。
+        switch (v[i].getType()) {
+            case XmlRpc::XmlRpcValue::TypeInt:
+                out.push_back(static_cast<double>(static_cast<int>(v[i])));
+                break;
+            case XmlRpc::XmlRpcValue::TypeDouble:
+                out.push_back(static_cast<double>(v[i]));
+                break;
+            case XmlRpc::XmlRpcValue::TypeBoolean:
+                out.push_back(static_cast<bool>(v[i]) ? 1.0 : 0.0);
+                break;
+            default:
+                return false;
+        }
     }
     return true;
 }

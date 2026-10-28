@@ -39,7 +39,14 @@ def main() -> None:
     msg.pose.orientation.z = qz
     msg.pose.orientation.w = qw
     pub.publish(msg)
-    rospy.loginfo("sent pose (%.3f, %.3f, %.3f)", x, y, z)
+    n = pub.get_num_connections()
+    if n == 0:
+        rospy.logwarn(
+            "sent pose (%.3f, %.3f, %.3f) but NO subscriber on /arm/target_pose; "
+            "is mpc_controller_node running?", x, y, z)
+    else:
+        rospy.loginfo("sent pose (%.3f, %.3f, %.3f) to %d subscriber(s)",
+                      x, y, z, n)
     rospy.sleep(1.0)
 
 
