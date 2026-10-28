@@ -1,8 +1,0 @@
-prefix=/home/zjh/Linux_robot_arm/install
-
-Name: arm_bringup
-Description: Description of arm_bringup
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

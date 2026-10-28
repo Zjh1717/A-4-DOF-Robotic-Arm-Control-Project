@@ -1,2 +1,0 @@
-arm_bringup:arm_controller:arm_description:arm_driver:arm_state_estimator
--DCATKIN_DEVEL_PREFIX=/home/zjh/Linux_robot_arm/devel -DCMAKE_INSTALL_PREFIX=/home/zjh/Linux_robot_arm/install -G Unix Makefiles

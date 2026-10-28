@@ -1,8 +1,0 @@
-prefix=/home/zjh/Linux_robot_arm/install
-
-Name: arm_description
-Description: Description of arm_description
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
