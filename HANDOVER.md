@@ -33,7 +33,8 @@ arm_driver_node —— 转固件角度(度)下发 arm.bundle.move(...)
 ```
 
 上位机入口脚本：`scripts/send_joint_goal.py`（发 4 关节目标）、
-`scripts/send_pose_goal.py`（发末端 `xyz+四元数`，走 IK）。
+`scripts/send_pose_goal.py`（发末端 `xyz+四元数`，走 IK）、
+`scripts/teleop_pose.py`（键盘增量控制末端 xyz）。
 
 ## 3. 核心模块与职责
 

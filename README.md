@@ -28,6 +28,7 @@ ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平
 ├── scripts/
 │   ├── send_joint_goal.py     # 发送 4 关节目标（URDF 弧度）
 │   └── send_pose_goal.py      # 发送末端位姿（xyz + 四元数）
+│   └── teleop_pose.py         # 键盘增量控制末端 xyz
 ├── src/
 │   ├── arm_description/       # URDF + RViz（无代码）
 │   │   ├── urdf/arm_4dof.urdf
@@ -124,6 +125,14 @@ python3 scripts/send_pose_goal.py <x> <y> <z> <qx> <qy> <qz> <qw>
 控制器收到 `/arm/target_pose` 后先做 IK 再交给关节 MPC 跟踪；不可达/超限时保持
 当前位姿并告警。注意本臂只有 4 个关节，姿态仅能实现“绕 Z 的 yaw + 绕 Y 的 pitch”，
 绕工具轴的自转会被投影忽略。
+
+键盘增量控制末端（`w/s` 前后、`a/d` 左右、`Space/z` 上下、`r` 回初始、`q` 退出，
+按住方向键连发）：
+
+```bash
+python3 scripts/teleop_pose.py        # 步长默认 0.01 m
+python3 scripts/teleop_pose.py 0.02   # 自定义步长
+```
 
 夹爪为 id4，按固件原单位（0~30）透传，MPC 不控制夹爪。
 
