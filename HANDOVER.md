@@ -28,8 +28,12 @@ mpc_controller_node (arm_controller) —— 关节空间 MPC
 arm_driver_node —— 转固件角度(度)下发 arm.bundle.move(...)
 
 参考输入: /arm/end_effector_trajectory (JointTrajectory, 4关节, URDF弧度)
+笛卡尔输入: /arm/target_pose (PoseStamped) —— 先解析 IK 再交给关节 MPC
 可视化: robot_state_publisher 订阅 /arm/joint_states 发布 TF, RViz 显示
 ```
+
+上位机入口脚本：`scripts/send_joint_goal.py`（发 4 关节目标）、
+`scripts/send_pose_goal.py`（发末端 `xyz+四元数`，走 IK）。
 
 ## 3. 核心模块与职责
 
@@ -42,6 +46,7 @@ arm_driver_node —— 转固件角度(度)下发 arm.bundle.move(...)
 | arm_state_estimator | kalman_filter.h/.cpp | 单关节 [q,dq] 卡尔曼滤波 |
 | arm_state_estimator | state_estimator_node.cpp | raw → filtered，夹爪透传 |
 | arm_controller | arm_kinematics.h/.cpp | 解析 URDF：FK、几何雅可比、限位（不硬编码 DH） |
+| arm_controller | arm_ik.h/.cpp | 解析逆解（底座 yaw + 平面 3R，URDF 空间） |
 | arm_controller | mpc_solver.h/.cpp | 投影梯度 MPC，状态[q,dq]、控制 q_dot、硬限位 |
 | arm_controller | trajectory_handler.h/.cpp | 参考轨迹采样/看门狗 |
 | arm_controller | mpc_controller_node.cpp | 控制主循环 |
@@ -65,6 +70,12 @@ arm_driver_node —— 转固件角度(度)下发 arm.bundle.move(...)
    故闭环为“读→解算→下发→读”。
 6. **死区**：驱动层 `move_deadband_deg`（默认 0.5°）跳过与上次目标差小于阈值的指令，
    避免固件不响应的微小指令。
+7. **笛卡尔接口走 IK**：`/arm/target_pose`（PoseStamped）先由 `arm_ik` 解析成 4 关节角，
+   再复用关节 MPC 跟踪。只实现 yaw(绕Z)+pitch(绕Y) 两个姿态自由度，绕工具轴自转投影
+   忽略；多解（肘上/肘下）选离当前构型最近者。
+   `arm_ik` 与固件参考 `inv_geo.py` 的 `solution_arm` 几何等价（同为底座 yaw + 平面 3R
+   余弦定理解），已交叉验证：`inv_geo` 的 IK 解经 code→urdf 换算后落回目标点，
+   误差仅来自 `inv_geo` 对关节角 0.01°、FK 4 位小数的舍入（~2e-5 m）。
 
 ## 5. 配置说明
 
@@ -88,6 +99,8 @@ arm_driver_node —— 转固件角度(度)下发 arm.bundle.move(...)
 - 固件基座高度与 URDF 肩高差 0.04m（仅影响笛卡尔坐标，不影响关节跟踪）。
 - `emergencyStop()` 用 `arm.bundle.lock()` 尽力而为，无固件级急停。
 - `src/arm_bringup/launch/arm__sim.launch` 为 0 字节占位（仿真未实现）。
+- 关节限位紧：joint3 上界仅 45°，复位位姿已贴近该限位，邻近的笛卡尔目标可能被 IK
+  判为不可达（属正确行为）。
 
 ## 7. 风险与常见坑
 

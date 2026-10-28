@@ -3,12 +3,14 @@
 #include <sensor_msgs/JointState.h>
 #include <std_msgs/Float64MultiArray.h>
 #include <trajectory_msgs/JointTrajectory.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include <fstream>
 #include <sstream>
 #include <vector>
 
 #include "arm_controller/arm_kinematics.h"
+#include "arm_controller/arm_ik.h"
 #include "arm_controller/mpc_solver.h"
 #include "arm_controller/trajectory_handler.h"
 
@@ -77,12 +79,15 @@ public:
         solver_->setJointLimits(kin_.lowerLimits(), kin_.upperLimits());
         solver_->setVelocityLimits(kin_.velocityLimits());
         loadWeights();
+        ik_.setJointLimits(kin_.lowerLimits(), kin_.upperLimits());
 
         state_sub_ = nh_.subscribe("/arm/joint_states", 1,
                                    &MPCControllerNode::jointStateCallback, this);
         // 参考轨迹：JointTrajectory（positions 按关节空间 URDF 弧度解释）。
         traj_sub_ = nh_.subscribe("/arm/end_effector_trajectory", 1,
                                   &MPCControllerNode::trajectoryCallback, this);
+        pose_sub_ = nh_.subscribe("/arm/target_pose", 1,
+                                  &MPCControllerNode::poseCallback, this);
         cmd_pub_ = nh_.advertise<std_msgs::Float64MultiArray>(
             "/arm/joint_command", 1);
 
@@ -139,6 +144,37 @@ private:
         traj_start_time_ = ros::Time::now();
     }
 
+    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
+        if (!state_received_) {
+            ROS_WARN_THROTTLE(1.0,
+                              "Pose target ignored: no joint state yet");
+            return;
+        }
+        Eigen::Vector3d pos(msg->pose.position.x, msg->pose.position.y,
+                            msg->pose.position.z);
+        // ROS 四元数顺序为 (x,y,z,w)，Eigen 为 (w,x,y,z)。
+        Eigen::Quaterniond quat(msg->pose.orientation.w, msg->pose.orientation.x,
+                                msg->pose.orientation.y, msg->pose.orientation.z);
+        Eigen::VectorXd q_ik;
+        if (!ik_.solve(pos, quat, q_current_, q_ik)) {
+            ROS_WARN_THROTTLE(1.0,
+                              "IK failed: target unreachable or out of limits");
+            return;
+        }
+        trajectory_msgs::JointTrajectory traj;
+        traj.joint_names = {"joint1", "joint2", "joint3", "joint4"};
+        trajectory_msgs::JointTrajectoryPoint pt;
+        for (int i = 0; i < q_ik.size(); ++i) {
+            pt.positions.push_back(q_ik(i));
+        }
+        pt.time_from_start = ros::Duration(2.0);
+        traj.points.push_back(pt);
+        trajectory_.setTrajectory(traj, trajectory_timeout_s_);
+        traj_start_time_ = ros::Time::now();
+        ROS_INFO("IK solved target pose -> q=[%.3f %.3f %.3f %.3f]",
+                 q_ik(0), q_ik(1), q_ik(2), q_ik(3));
+    }
+
     void controlLoop(const ros::TimerEvent&) {
         if (!state_received_) {
             return;
@@ -192,9 +228,10 @@ private:
 
     ros::NodeHandle nh_;
     arm_controller::ArmKinematics kin_;
+    arm_controller::ArmIK ik_;
     std::unique_ptr<arm_controller::MPCSolver> solver_;
     arm_controller::TrajectoryHandler trajectory_;
-    ros::Subscriber state_sub_, traj_sub_;
+    ros::Subscriber state_sub_, traj_sub_, pose_sub_;
     ros::Publisher cmd_pub_;
     ros::Timer control_timer_;
 

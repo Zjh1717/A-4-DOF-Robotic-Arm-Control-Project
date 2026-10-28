@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   sensor_msgs
   trajectory_msgs
+  geometry_msgs
   arm_driver
 )
 
@@ -17,7 +18,7 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES    arm_controller_lib
-  CATKIN_DEPENDS roscpp rospy std_msgs sensor_msgs trajectory_msgs arm_driver
+  CATKIN_DEPENDS roscpp rospy std_msgs sensor_msgs trajectory_msgs geometry_msgs arm_driver
   DEPENDS EIGEN3
 )
 
@@ -33,6 +34,7 @@ include_directories(
 add_library(arm_controller_lib
   src/mpc_solver.cpp
   src/arm_kinematics.cpp
+  src/arm_ik.cpp
   src/trajectory_handler.cpp
 )
 add_dependencies(arm_controller_lib

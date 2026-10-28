@@ -9,6 +9,7 @@ ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平
 - 串口驱动：等价 `python_sdk.py` 中 `Arm` 类的 C++ REPL 驱动（连接、读关节、点动、失能）。
 - 状态估计：每关节一阶卡尔曼滤波，由位置观测估计角度/角速度。
 - 运动学：从 URDF 解析 4-DOF 正解与几何雅可比、关节限位（不硬编码 DH、不依赖 kdl）。
+- 笛卡尔逆解：解析 IK（底座 yaw + 平面 3R），把末端 `(x,y,z)+四元数` 目标解成关节角。
 - 控制：关节空间 MPC（状态 [q,dq]、控制 q_dot、关节限位硬约束，纯 Eigen 无求解器依赖）。
 - 可视化：`robot_state_publisher` + RViz 基础配置。
 
@@ -24,7 +25,9 @@ ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平
 ```
 .
 ├── run_arm.sh                 # 一键启动脚本
-├── scripts/send_joint_goal.py # 发送 4 关节目标（URDF 弧度）
+├── scripts/
+│   ├── send_joint_goal.py     # 发送 4 关节目标（URDF 弧度）
+│   └── send_pose_goal.py      # 发送末端位姿（xyz + 四元数）
 ├── src/
 │   ├── arm_description/       # URDF + RViz（无代码）
 │   │   ├── urdf/arm_4dof.urdf
@@ -39,7 +42,7 @@ ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平
 │   │   ├── src/
 │   │   ├── config/kalman_params.yaml
 │   │   └── launch/estimator.launch
-│   ├── arm_controller/        # URDF 运动学 + MPC + 轨迹处理
+│   ├── arm_controller/        # URDF 运动学/IK + MPC + 轨迹处理
 │   │   ├── include/arm_controller/
 │   │   ├── src/
 │   │   └── config/{mpc_params,kinematics_params}.yaml
@@ -56,7 +59,8 @@ ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平
 - Ubuntu 20.04 + ROS1 Noetic（`ros-noetic-desktop-full`）。
 - 系统库：`libeigen3-dev`（Eigen3）、`libserial-dev`（serial）。
 - ROS 包：`roscpp`、`rospy`、`std_msgs`、`sensor_msgs`、`trajectory_msgs`、
-  `robot_state_publisher`、`rviz`、`joint_state_publisher`、`urdf`、`xacro`。
+  `geometry_msgs`、`robot_state_publisher`、`rviz`、`joint_state_publisher`、
+  `urdf`、`xacro`。
 - 硬件：CH340 USB 串口（Ubuntu 内置驱动），ESP32/MicroPython 下位机。
 
 ## 安装
@@ -111,6 +115,16 @@ rostopic echo /arm/joint_command       # MPC 下发的关节目标
 python3 scripts/send_joint_goal.py 0.0 -1.5708 0.7854 0.7941
 ```
 
+发送末端位姿目标（笛卡尔，`base_link` 系，位置米 + 四元数 `x y z w`）：
+
+```bash
+python3 scripts/send_pose_goal.py <x> <y> <z> <qx> <qy> <qz> <qw>
+```
+
+控制器收到 `/arm/target_pose` 后先做 IK 再交给关节 MPC 跟踪；不可达/超限时保持
+当前位姿并告警。注意本臂只有 4 个关节，姿态仅能实现“绕 Z 的 yaw + 绕 Y 的 pitch”，
+绕工具轴的自转会被投影忽略。
+
 夹爪为 id4，按固件原单位（0~30）透传，MPC 不控制夹爪。
 
 ## 测试
@@ -120,6 +134,8 @@ python3 scripts/send_joint_goal.py 0.0 -1.5708 0.7854 0.7941
 - 无硬件自测：可用 pty 伪串口模拟下位机（开发调试用，仓库不含该脚本）。
 - 真机“保持位姿”自检：发送等于当前值的关节目标，机械臂应不动。
 - 离线 FK 校验：`arm_kinematics.cpp` 解析 URDF 后 `numJoints()==4`，限位/速度正确。
+- 离线 IK 校验：`arm_ik.cpp` 与 URDF FK 回环（位置/俯仰误差 ~1e-16），并已与
+  `inv_geo.py` 的 `solution_arm` 交叉验证（落点误差 ~2e-5 m，来自其舍入）。
 
 ## 构建
 
@@ -155,6 +171,8 @@ git commit -m "chore: stop tracking catkin build artifacts"
 - **收敛停在目标附近 1~1.5°**：固件对 <1° 指令不响应（死区），属硬件特性；
   软件已正确输出目标，可通过调 `move_deadband_deg` 控制下发粒度。
 - **串口被占用**：Thonny 或其它串口工具与驱动互斥，关闭后再启动。
+- **IK 报“不可达”**：多为目标超出工作空间或超出 URDF 关节限位（尤其 joint3 上界
+  仅 45°）。属正确行为，控制器会保持当前位姿；换一个更近/更低的目标重试。
 
 ## 开发指南
 
@@ -171,7 +189,7 @@ git commit -m "chore: stop tracking catkin build artifacts"
 | --- | --- | --- | --- | --- |
 | `arm_driver_node` | 50 Hz | `/arm/joint_command` (`Float64MultiArray[5]`) | `/arm/joint_states_raw` (`JointState`) | 前 4 元素弧度(URDF)，第 5 夹爪原单位 |
 | `state_estimator_node` | 50 Hz | `/arm/joint_states_raw` | `/arm/joint_states` | KF 滤波，夹爪透传 |
-| `mpc_controller_node` | 20 Hz | `/arm/joint_states`、`/arm/end_effector_trajectory` | `/arm/joint_command` | 关节空间 MPC，URDF 弧度 |
+| `mpc_controller_node` | 20 Hz | `/arm/joint_states`、`/arm/end_effector_trajectory`、`/arm/target_pose` | `/arm/joint_command` | 关节空间 MPC（含 IK），URDF 弧度 |
 | `robot_state_publisher` | 事件 | `/arm/joint_states`（remap） | TF | 由 `arm_real.launch` 启动 |
 
 ## Codex 实现记录
@@ -181,13 +199,16 @@ git commit -m "chore: stop tracking catkin build artifacts"
 修改：`serial_driver.h/.cpp`、`servo_driver.h/.cpp`、`servo_protocol.h`、
 `arm_driver_node.cpp`、`state_estimator_node.cpp`、`arm_kinematics.h/.cpp`、
 `mpc_solver.h/.cpp`、`trajectory_handler.h/.cpp`、`mpc_controller_node.cpp`、
-`mpc_params.yaml`、`arm_real.launch`、`arm_description/CMakeLists.txt`。
+`arm_controller/package.xml`、`arm_controller/CMakeLists.txt`、`mpc_params.yaml`、
+`arm_real.launch`、`arm_description/CMakeLists.txt`。
 
 新增：`src/arm_description/urdf/arm_4dof.urdf`（joint2 `rpy=0 0 0`）、
 `src/arm_description/rviz/arm_display.rviz`、`src/arm_driver/config/servo_config.yaml`、
 `src/arm_state_estimator/config/kalman_params.yaml`、`launch/estimator.launch`、
 `src/arm_controller/config/kinematics_params.yaml`、`run_arm.sh`、
-`scripts/send_joint_goal.py`、`.gitignore`、`HANDOVER.md`。
+`src/arm_controller/include/arm_controller/arm_ik.h`、
+`src/arm_controller/src/arm_ik.cpp`、`scripts/send_joint_goal.py`、
+`scripts/send_pose_goal.py`、`.gitignore`、`HANDOVER.md`。
 
 ### 未完成项
 
@@ -197,7 +218,7 @@ git commit -m "chore: stop tracking catkin build artifacts"
 - `joint2_offset_deg` 默认 -90°，需真机最终校核。
 - KF 噪声 Q/R 为占位值；MPC 步长/迭代需调参。
 - `emergencyStop()` 以 `arm.bundle.lock()` 尽力而为。
-- 未实现：笛卡尔 moveto/逆解、Gazebo 仿真、ros_control、力控。
+- 未实现：固件 `moveto` 级笛卡尔直达、Gazebo 仿真、ros_control、力控。
 
 ### 关键假设
 
