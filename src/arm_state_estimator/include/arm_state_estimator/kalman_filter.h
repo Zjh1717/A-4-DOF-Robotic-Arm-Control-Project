@@ -5,6 +5,9 @@
 
 namespace arm_state_estimator {
 
+// 单关节一阶带速度卡尔曼滤波器。
+// 状态 x=[q, dq]，观测为位置 q，输入为加速度指令（节点中恒为 0，速度由滤波估计）。
+// 模型：x_{k+1} = F x_k + B u，F=[1 dt; 0 1]，B=[0.5dt^2; dt]；观测 H=[1 0]。
 class JointKalmanFilter {
 public:
     JointKalmanFilter(double dt,

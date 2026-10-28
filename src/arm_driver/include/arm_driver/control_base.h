@@ -1,6 +1,10 @@
 #ifndef ARM_DRIVER_CONTROL_BASE_H
 #define ARM_DRIVER_CONTROL_BASE_H
 
+// 驱动抽象接口。
+// 所有下位机/仿真驱动都实现 ControlBase，节点只依赖本接口，便于替换实现。
+// 约定：位置单位为 URDF 空间（弧度），夹爪为固件原单位透传。
+
 #include <vector>
 #include <array>
 

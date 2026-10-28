@@ -1,149 +1,171 @@
 # 4-DOF 机械臂 ROS1 工程
 
-ROS1 Noetic catkin 工作区：4-DOF 机械臂（底座 + 平面 3R）+ 夹爪。
+ROS1 Noetic catkin 工作区，控制一台 4-DOF 机械臂（底座旋转 + 平面 3R 俯仰臂）+ 夹爪。
 下位机为 ESP32/MicroPython 固件，上位机通过 CH340 USB 串口以 MicroPython REPL
 文本命令通信；控制器为基于 URDF 模型的关节空间 MPC。
 
-## 使用方法
+## 功能
 
-### 前置条件
+- 串口驱动：等价 `python_sdk.py` 中 `Arm` 类的 C++ REPL 驱动（连接、读关节、点动、失能）。
+- 状态估计：每关节一阶卡尔曼滤波，由位置观测估计角度/角速度。
+- 运动学：从 URDF 解析 4-DOF 正解与几何雅可比、关节限位（不硬编码 DH、不依赖 kdl）。
+- 控制：关节空间 MPC（状态 [q,dq]、控制 q_dot、关节限位硬约束，纯 Eigen 无求解器依赖）。
+- 可视化：`robot_state_publisher` + RViz 基础配置。
 
-- ROS1 Noetic（`/opt/ros/noetic`）。
-- 已编译工作区（`run_arm.sh` 会在缺少 `devel/` 时自动 `catkin_make`）。
-- CH340 USB 驱动（Ubuntu 一般已内置），插上后出现 `/dev/ttyUSB0`。
+## 技术栈
 
-### 串口权限（一次性）
+- ROS1 Noetic（Ubuntu 20.04）、catkin_make、C++14、Eigen3。
+- 串口：termios（协议无关字节层）+ MicroPython REPL 文本协议。
+- 消息：`sensor_msgs/JointState`、`trajectory_msgs/JointTrajectory`、
+  `std_msgs/Float64MultiArray`，以及本包自定义 `arm_driver/ArmJointState`。
 
-当前用户必须在 `dialout` 组，否则无法打开 `/dev/ttyUSB0`：
+## 目录结构
 
 ```
+.
+├── run_arm.sh                 # 一键启动脚本
+├── scripts/send_joint_goal.py # 发送 4 关节目标（URDF 弧度）
+├── src/
+│   ├── arm_description/       # URDF + RViz（无代码）
+│   │   ├── urdf/arm_4dof.urdf
+│   │   └── rviz/arm_display.rviz
+│   ├── arm_driver/            # 串口驱动 + 单位/零位换算
+│   │   ├── include/arm_driver/
+│   │   ├── src/
+│   │   ├── msg/ArmJointState.msg
+│   │   └── config/servo_config.yaml
+│   ├── arm_state_estimator/   # 卡尔曼滤波
+│   │   ├── include/arm_state_estimator/
+│   │   ├── src/
+│   │   ├── config/kalman_params.yaml
+│   │   └── launch/estimator.launch
+│   ├── arm_controller/        # URDF 运动学 + MPC + 轨迹处理
+│   │   ├── include/arm_controller/
+│   │   ├── src/
+│   │   └── config/{mpc_params,kinematics_params}.yaml
+│   └── arm_bringup/           # 实机总启动
+│       └── launch/arm_real.launch
+├── HANDOVER.md                # 交接/架构文档
+└── .gitignore
+```
+
+`build/`、`devel/`、`install/` 为 catkin 构建产物，已由 `.gitignore` 忽略。
+
+## 环境依赖
+
+- Ubuntu 20.04 + ROS1 Noetic（`ros-noetic-desktop-full`）。
+- 系统库：`libeigen3-dev`（Eigen3）、`libserial-dev`（serial）。
+- ROS 包：`roscpp`、`rospy`、`std_msgs`、`sensor_msgs`、`trajectory_msgs`、
+  `robot_state_publisher`、`rviz`、`joint_state_publisher`、`urdf`、`xacro`。
+- 硬件：CH340 USB 串口（Ubuntu 内置驱动），ESP32/MicroPython 下位机。
+
+## 安装
+
+```bash
+cd <工作区路径>          # 即本仓库根目录
+source /opt/ros/noetic/setup.bash
+catkin_make              # 首次构建；run_arm.sh 也会在缺少 devel/ 时自动构建
+source devel/setup.bash
+```
+
+串口权限（一次性，重新登录后生效）：
+
+```bash
 sudo usermod -aG dialout $USER
 ```
 
-注销并重新登录后生效；临时方案（重新插拔后失效）：
+临时方案（重新插拔后失效）：`sudo chmod 666 /dev/ttyUSB0`。
 
-```
-sudo chmod 666 /dev/ttyUSB0
+## 配置
+
+所有参数集中在各包 `config/*.yaml`，由 `arm_real.launch` 加载：
+
+| 文件 | 关键项 | 说明 |
+|---|---|---|
+| `arm_driver/config/servo_config.yaml` | `port`、`baudrate`、`read_rate_hz` | 串口与读频率 |
+| 同上 | `move_speed`、`move_deadband_deg` | 点动速度、下发死区（度） |
+| 同上 | `joint2_offset_deg` | 肩关节零位偏移（默认 -90） |
+| `arm_state_estimator/config/kalman_params.yaml` | `dt`、过程/测量噪声 | 滤波参数（占位值） |
+| `arm_controller/config/mpc_params.yaml` | `horizon`、`dt`、`lr`、`max_iter`、`trajectory_timeout_s` | MPC 参数 |
+| `arm_controller/config/kinematics_params.yaml` | `urdf_file` | 兜底 URDF 路径（优先 `/robot_description`） |
+
+## 运行
+
+```bash
+./run_arm.sh                          # 启动驱动+估计器+MPC+RViz
+ARM_PORT=/dev/ttyUSB1 ./run_arm.sh    # 指定串口
+RUN_ARM_BUILD=1 ./run_arm.sh          # 强制重新编译
 ```
 
-### 一键启动
+验证数据流（另开终端，先 `source devel/setup.bash`）：
 
-```
-cd <工作区路径>
-./run_arm.sh
-```
-
-可选环境变量：
-
-```
-ARM_PORT=/dev/ttyUSB1 ./run_arm.sh   # 指定串口
-RUN_ARM_BUILD=1 ./run_arm.sh         # 强制重新编译
-```
-
-### 验证数据流（另开终端）
-
-```
-source /opt/ros/noetic/setup.bash
-source <工作区路径>/devel/setup.bash
+```bash
 rostopic echo /arm/joint_states_raw    # 驱动读回的原始关节角（URDF 弧度）
 rostopic echo /arm/joint_states        # KF 滤波后
 rostopic echo /arm/joint_command       # MPC 下发的关节目标
 ```
 
-### 发送关节目标（先保持，再小幅运动）
+发送关节目标（先保持当前位姿验证方向，再小幅运动）：
 
-先读取当前 4 个运动学关节角（rad），用“当前值”做保持测试，确认换算回环不会引起
-运动；确认方向无误后再小幅改某一关节：
-
-```
-# 发送关节目标（URDF 空间，弧度）
+```bash
 python3 scripts/send_joint_goal.py 0.0 -1.5708 0.7854 0.7941
 ```
 
-也可用 `rostopic pub`，但嵌套消息的 YAML 写法易错（`header.stamp: now` 不被支持），
-推荐用上面的脚本。
-
 夹爪为 id4，按固件原单位（0~30）透传，MPC 不控制夹爪。
 
-### 零位 / 方向校核
+## 测试
 
-- 固件零位=竖直向上，URDF 零位=水平向前，二者在 joint2 相差 90°；肩/肘/腕方向取反。
-- 换算集中在 `src/arm_driver/include/arm_driver/servo_protocol.h`。
-- 偏移量由 `src/arm_driver/config/servo_config.yaml` 的 `joint2_offset_deg` 控制（默认
-  `-90.0`）。若真机姿态相反，把它改为 `90.0` 后重启驱动即可。
+- 构建后冒烟：启动 `./run_arm.sh`，依次检查三个话题是否有数据、`/arm/joint_command`
+  是否约等于 `/arm/joint_states`。
+- 无硬件自测：可用 pty 伪串口模拟下位机（开发调试用，仓库不含该脚本）。
+- 真机“保持位姿”自检：发送等于当前值的关节目标，机械臂应不动。
+- 离线 FK 校验：`arm_kinematics.cpp` 解析 URDF 后 `numJoints()==4`，限位/速度正确。
 
-### 安全
+## 构建
 
-- 下位机 `bundle.move` 为阻塞执行，控制器为点到点闭环。
-- 当前固件无专用急停指令，`emergencyStop()` 以 `arm.bundle.lock()` 失能作为尽力而为。
-- 紧急情况请直接断开串口/断电。
+```bash
+source /opt/ros/noetic/setup.bash
+catkin_make
+```
 
-### 关键参数
+产物：`devel/lib/arm_driver/arm_driver_node`、
+`devel/lib/arm_state_estimator/state_estimator_node`、
+`devel/lib/arm_controller/mpc_controller_node`，以及三个 `.so` 库。
 
-- `src/arm_driver/config/servo_config.yaml` 的 `move_deadband_deg`（默认 0.5°）：
-  新目标与上次已下发目标的差值小于该值时不重复下发，避免固件不响应的微小指令。
-- `src/arm_controller/config/mpc_params.yaml` 的 `trajectory_timeout_s`（默认 2.0 s）：
-  参考轨迹有效窗口；到期后控制器仍跟踪最后一个路点以保证收敛。
+## 部署 / 交付前整理
 
-## Codex 实现记录
+历史提交中 `build/`、`devel/` 曾被视为普通文件跟踪。上传前执行（只改 git 索引，
+不删磁盘文件，功能不受影响）：
 
-### 修改/新增文件
+```bash
+git rm -r --cached build devel install   # install 目录若存在
+git add .gitignore
+git commit -m "chore: stop tracking catkin build artifacts"
+```
 
-修改：
+> 若需彻底缩小 `.git` 体积（历史已含约 48MB 构建产物），需用 `git filter-repo`
+> 重写历史；有风险，默认不做。
 
-- `src/arm_driver/include/arm_driver/serial_driver.h` — 串口字节传输层接口。
-- `src/arm_driver/include/arm_driver/servo_driver.h` — REPL 驱动（等价 `Arm` 类）接口。
-- `src/arm_driver/include/arm_driver/servo_protocol.h` — 度↔弧度 + code↔urdf 集中转换。
-- `src/arm_driver/src/serial_driver.cpp` — termios 串口打开/读写/超时/flush。
-- `src/arm_driver/src/servo_driver.cpp` — REPL 命令、读回解析、关节命令/状态转换。
-- `src/arm_driver/src/arm_driver_node.cpp` — 订阅 `/arm/joint_command`，发布 `/arm/joint_states_raw`。
-- `src/arm_state_estimator/src/state_estimator_node.cpp` — 订阅 `_raw`、KF 滤波、发布 `/arm/joint_states`。
-- `src/arm_controller/include/arm_controller/arm_kinematics.h` — URDF 解析/FK/雅可比/限位接口。
-- `src/arm_controller/src/arm_kinematics.cpp` — URDF 解析、FK、几何雅可比实现。
-- `src/arm_controller/include/arm_controller/mpc_solver.h` — MPC 求解器接口（控制量=速度）。
-- `src/arm_controller/src/mpc_solver.cpp` — 投影梯度 MPC（状态 [q,dq]，硬限位）。
-- `src/arm_controller/include/arm_controller/trajectory_handler.h` — 参考轨迹插值/看门狗接口。
-- `src/arm_controller/src/trajectory_handler.cpp` — 参考轨迹采样实现。
-- `src/arm_controller/src/mpc_controller_node.cpp` — 控制器节点（URDF 空间，弧度）。
-- `src/arm_controller/config/mpc_params.yaml` — MPC 参数（限位改由 URDF 提供）。
-- `src/arm_bringup/launch/arm_real.launch` — 修正 URDF 路径、话题 remap、加载节点。
-- `src/arm_description/CMakeLists.txt` — 只安装实际存在的 `urdf`/`rviz` 目录。
+## 常见问题
 
-新增：
+- **打不开 `/dev/ttyUSB0`**：当前用户不在 `dialout` 组，见“安装”。
+- **机械臂方向相反**：把 `servo_config.yaml` 的 `joint2_offset_deg` 翻转为 `90.0` 重启。
+- **轨迹不生效 / `rostopic pub` 报 “No field name”**：嵌套 YAML 写法易错
+  （`header.stamp: now` 不被支持），改用 `scripts/send_joint_goal.py`。
+- **收敛停在目标附近 1~1.5°**：固件对 <1° 指令不响应（死区），属硬件特性；
+  软件已正确输出目标，可通过调 `move_deadband_deg` 控制下发粒度。
+- **串口被占用**：Thonny 或其它串口工具与驱动互斥，关闭后再启动。
 
-- `src/arm_description/urdf/arm_4dof.urdf` — 本工程唯一使用的 URDF（joint2 `rpy` 已修正为 `0 0 0`）。
-- `src/arm_description/rviz/arm_display.rviz` — 基础 RViz 配置（RobotModel + TF）。
-- `src/arm_driver/config/servo_config.yaml` — 串口/REPL 驱动参数。
-- `src/arm_state_estimator/config/kalman_params.yaml` — 估计器参数。
-- `src/arm_state_estimator/launch/estimator.launch` — 估计器启动文件。
-- `src/arm_controller/config/kinematics_params.yaml` — 运动学来源（兜底 urdf_file）。
-- `run_arm.sh` — 根目录真机一键启动脚本（可选 `ARM_PORT`、`RUN_ARM_BUILD=1`）。
-- `scripts/send_joint_goal.py` — 发送单个 4 关节目标（URDF 弧度）给 MPC。
+## 开发指南
 
-保留未改：`arm_driver/msg/ArmJointState.msg`、`control_base.h`、`kalman_filter.h/.cpp`、
-各包 `CMakeLists.txt`/`package.xml`（driver 的 CMake 已能编译，无需改动）。
+- 分层：感知（driver/estimator）→ 规划（trajectory_handler）→ 控制（MPC）→
+  执行（driver）。层间仅通过话题/消息通信，节点内不直接调用其它包。
+- 单位与坐标约定：控制器内部一律 URDF 空间（弧度）；固件角度（度）与零位换算只在
+  `servo_protocol.h` 中集中处理，其它代码不得自行换算。
+- 新增话题/服务先在对应包声明消息或复用 `std_msgs`/`sensor_msgs`/`trajectory_msgs`。
+- 公共 API 注释与复杂逻辑说明见各头文件；更完整的设计决策见 [HANDOVER.md](HANDOVER.md)。
 
-### 未完成项
-
-- `bundle.move` 的 `speed` 与 rad/s 的映射未标定，见 `servo_config.yaml` 的 TODO。
-- 下位机 `bundle.move` 为阻塞执行，控制闭环为点到点（读→解算→下发→再读），速率受动作耗时限制。
-- 夹爪按固件原单位透传，未做运动学、限位或标定。
-- joint2 零位偏移默认 -90°，需真机校核；翻转 `joint2_offset_deg` 即可。
-- KF 过程/测量噪声 Q/R 为占位值，需真机标定。
-- MPC 投影梯度步长/迭代次数需调参；未接入外部 QP 求解器。
-- `emergencyStop()` 用 `arm.bundle.lock()` 尽力而为，固件无专用急停指令。
-- 未实现：笛卡尔 moveto/逆解、Gazebo 仿真、ros_control、力控。
-
-### 假设
-
-- 固件关节角单位为度；REPL 命令集以 `python_sdk.py` 的 `Arm` 类为准。
-- 4 个运动学关节（底座/肩/肘/腕）+ 1 个夹爪（id4，原单位透传）。
-- 控制量 = 关节速度（q_dot），MPC 状态 [q,dq]，关节限位为硬约束（取 URDF `lower/upper/velocity`）。
-- 速度由状态估计器 KF 估计，驱动只发布位置。
-- URDF 为唯一运动学来源，连杆长度解析自 origin/axis（0.06/0.04/0.025），不硬编码 DH。
-- 平面三关节（肩/肘/腕）与固件方向相反需取反号，肩关节再叠加 -90° 零位偏移（已由 `inv_geo.py` 正解数值比对确认）。
-
-### 节点频率与通信接口
+## 节点频率与通信接口
 
 | 节点 | 频率 | 订阅 | 发布 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -152,17 +174,43 @@ python3 scripts/send_joint_goal.py 0.0 -1.5708 0.7854 0.7941
 | `mpc_controller_node` | 20 Hz | `/arm/joint_states`、`/arm/end_effector_trajectory` | `/arm/joint_command` | 关节空间 MPC，URDF 弧度 |
 | `robot_state_publisher` | 事件 | `/arm/joint_states`（remap） | TF | 由 `arm_real.launch` 启动 |
 
+## Codex 实现记录
+
+### 修改/新增文件
+
+修改：`serial_driver.h/.cpp`、`servo_driver.h/.cpp`、`servo_protocol.h`、
+`arm_driver_node.cpp`、`state_estimator_node.cpp`、`arm_kinematics.h/.cpp`、
+`mpc_solver.h/.cpp`、`trajectory_handler.h/.cpp`、`mpc_controller_node.cpp`、
+`mpc_params.yaml`、`arm_real.launch`、`arm_description/CMakeLists.txt`。
+
+新增：`src/arm_description/urdf/arm_4dof.urdf`（joint2 `rpy=0 0 0`）、
+`src/arm_description/rviz/arm_display.rviz`、`src/arm_driver/config/servo_config.yaml`、
+`src/arm_state_estimator/config/kalman_params.yaml`、`launch/estimator.launch`、
+`src/arm_controller/config/kinematics_params.yaml`、`run_arm.sh`、
+`scripts/send_joint_goal.py`、`.gitignore`、`HANDOVER.md`。
+
+### 未完成项
+
+- `bundle.move` 的 `speed` 与 rad/s 映射未标定。
+- 下位机 `bundle.move` 阻塞执行，控制闭环为点到点。
+- 夹爪按原单位透传，未做运动学/限位。
+- `joint2_offset_deg` 默认 -90°，需真机最终校核。
+- KF 噪声 Q/R 为占位值；MPC 步长/迭代需调参。
+- `emergencyStop()` 以 `arm.bundle.lock()` 尽力而为。
+- 未实现：笛卡尔 moveto/逆解、Gazebo 仿真、ros_control、力控。
+
+### 关键假设
+
+- 固件关节角单位为度；REPL 命令集以 `python_sdk.py` 的 `Arm` 类为准。
+- 4 运动学关节 + 1 夹爪；夹爪 id4 原单位透传。
+- 控制量 = 关节速度 q_dot，状态 [q,dq]，限位取 URDF `lower/upper/velocity`。
+- 速度由 KF 估计，驱动只发布位置。
+- URDF 为唯一运动学来源，连杆长度解析自 origin/axis，不硬编码 DH。
+- 平面三关节方向取反 + 肩关节 -90° 零位偏移（已由 `inv_geo.py` 正解数值比对确认）。
+
 ### 编译/检查结果
 
-- `catkin_make` 全量通过：`arm_driver_node`、`state_estimator_node`、`mpc_controller_node` 及 3 个库均成功生成。
-- 离线 FK 校验通过：`numJoints=4`，URDF 限位/速度解析正确，已知位姿 FK 与 `inv_geo.py` 正解一致。
-- ROS 冒烟测试通过：`mpc_controller_node` 启动、从 `/robot_description` 加载 URDF、按 20 Hz 发布 5 元素 `/arm/joint_command`。
-- 模拟下位机（pty 伪串口）闭环自测通过：驱动读回 `[10,20,30,40,5]°` 正确转换为
-  URDF 弧度，估计器滤波输出正确，控制器按 URDF 限位钳位并下发，驱动反向换算回代码度
-  与输入一致（见 `README` 使用方法）。
-- 真机只读联调通过：REPL 握手成功，读回代码度 `[0,0,-45,-45.5,0]`，正确转换为
-  URDF 弧度 `[0,-1.5708,0.7854,0.7941,0]`。
-- 真机“保持位姿”闭环通过：控制器下发目标 ≈ 当前位姿（误差 ~1e-10 rad），机械臂不动。
-- 真机小幅运动验证通过：底座 joint1 指令 +0.1 rad，实测转至 ~+0.0785 rad（方向/量级正确），
-  回零后 ~+0.0262 rad。收敛尾段受固件死区限制（<1° 的微小指令不被舵机执行），
-  属固件/硬件特性，软件侧已正确输出目标。
+- `catkin_make` 全量通过（三个节点 + 三个库）。
+- 离线 FK 校验通过（`numJoints=4`，限位/速度解析正确，FK 与 `inv_geo.py` 一致）。
+- pty 伪串口闭环自测通过（换算、滤波、限位钳位、反向下发一致）。
+- 真机只读联调、保持位姿、小幅运动均验证通过（详见“功能”与 HANDOVER 的风险说明）。

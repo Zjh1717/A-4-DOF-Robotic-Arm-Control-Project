@@ -10,17 +10,18 @@
 夹爪不参与运动学，本脚本不下发夹爪目标。
 """
 import sys
+from typing import List
 
 import rospy
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 
-def main():
+def main() -> None:
     if len(sys.argv) != 5:
         print(__doc__)
         sys.exit(1)
     try:
-        q = [float(x) for x in sys.argv[1:5]]
+        q: List[float] = [float(x) for x in sys.argv[1:5]]
     except ValueError:
         print("关节值必须是数字")
         sys.exit(1)

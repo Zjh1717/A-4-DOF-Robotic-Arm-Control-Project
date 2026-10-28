@@ -1,0 +1,45 @@
+# ===== ROS1 / catkin build artifacts =====
+/build/
+/devel/
+/install/
+/logs/
+catkin_workspace/
+.catkin_tools/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# ===== env / secrets =====
+.env
+.env.*
+!.env.example
+*.local.env
+
+# ===== IDE / editor / OS =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== logs / temp =====
+*.log
+/tmp/
+*.tmp
+*.bak
+
+# ===== tool / agent-specific dirs =====
+.agents/
+.aws/
+.codex/
+
+# ===== ROS-specific =====
+*.bag
+*.active
