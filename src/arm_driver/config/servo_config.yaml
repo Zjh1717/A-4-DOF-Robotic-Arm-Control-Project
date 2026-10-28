@@ -6,6 +6,9 @@ read_rate_hz: 50.0
 # arm.bundle.move(...) 的 speed 参数（固件单位未在 SDK 中明确，按 demo 常用值）。
 # TODO: 真机标定 speed 与 rad/s 的映射关系。
 move_speed: 30
+# 下发死区（度）：新目标与上次已下发目标的差值小于该值时不重复下发，避免固件
+# 无法执行的微小指令。真机观察到 <1° 指令不被舵机响应，故默认 0.5°。
+move_deadband_deg: 0.5
 joint_names: ["joint1", "joint2", "joint3", "joint4", "tool_fixed"]
 # 肩关节（joint2）固件零位 -> URDF 零位偏移（度）。固件零位=竖直向上，
 # URDF 零位=水平向前，故取 -90°。若真机姿态相反，翻转此值即可。

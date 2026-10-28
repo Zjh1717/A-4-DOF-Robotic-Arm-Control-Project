@@ -18,12 +18,14 @@ public:
         int move_speed = 30;
         double read_rate_hz = 50.0;
         double joint2_offset_deg = arm_driver::kJoint2CodeToUrdfOffsetDeg;
+        double move_deadband_deg = 0.5;
 
         nh_.param<std::string>("port", port, "/dev/ttyUSB0");
         nh_.param<int>("baudrate", baudrate, 115200);
         nh_.param<int>("read_timeout_ms", read_timeout_ms, 1000);
         nh_.param<int>("move_speed", move_speed, 30);
         nh_.param<double>("read_rate_hz", read_rate_hz, 50.0);
+        nh_.param<double>("move_deadband_deg", move_deadband_deg, 0.5);
         nh_.param<double>("joint2_offset_deg", joint2_offset_deg,
                           arm_driver::kJoint2CodeToUrdfOffsetDeg);
         nh_.param<std::vector<std::string>>(
@@ -31,7 +33,8 @@ public:
             {"joint1", "joint2", "joint3", "joint4", "tool_fixed"});
 
         driver_ = std::make_unique<arm_driver::ServoDriver>(
-            port, baudrate, read_timeout_ms, joint2_offset_deg, move_speed);
+            port, baudrate, read_timeout_ms, joint2_offset_deg, move_speed,
+            move_deadband_deg);
 
         if (!driver_->init()) {
             ROS_FATAL("Failed to initialize REPL servo driver on %s", port.c_str());

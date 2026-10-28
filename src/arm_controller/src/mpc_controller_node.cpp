@@ -40,12 +40,15 @@ public:
         double dt = 0.05;
         int max_iter = 100;
         double lr = 0.05;
+        double trajectory_timeout_s = 2.0;
         nh_.param<int>("mpc/horizon", horizon, 10);
         nh_.param<double>("mpc/dt", dt, 0.05);
         nh_.param<int>("mpc/max_iter", max_iter, 100);
         nh_.param<double>("mpc/lr", lr, 0.05);
+        nh_.param<double>("mpc/trajectory_timeout_s", trajectory_timeout_s, 2.0);
         horizon_ = horizon;
         dt_ = dt;
+        trajectory_timeout_s_ = trajectory_timeout_s;
 
         // 运动学：从 robot_description 解析 URDF（4 个运动学关节）。
         std::string urdf;
@@ -131,7 +134,8 @@ private:
 
     void trajectoryCallback(
         const trajectory_msgs::JointTrajectory::ConstPtr& msg) {
-        trajectory_.setTrajectory(*msg);
+        ROS_INFO("Received trajectory: %zu points", msg->points.size());
+        trajectory_.setTrajectory(*msg, trajectory_timeout_s_);
         traj_start_time_ = ros::Time::now();
     }
 
@@ -141,8 +145,9 @@ private:
         }
 
         std::vector<Eigen::VectorXd> ref;
-        if (!trajectory_.empty() &&
-            trajectory_.isActive((ros::Time::now() - traj_start_time_).toSec())) {
+        // 有轨迹时始终跟踪（sample 会夹到最后一个路点），保证机械臂收敛到最终目标；
+        // 仅在从未收到轨迹时才保持当前位姿。
+        if (!trajectory_.empty()) {
             double t = (ros::Time::now() - traj_start_time_).toSec();
             Eigen::VectorXd q_ref;
             if (trajectory_.sample(t, q_ref)) {
@@ -162,6 +167,8 @@ private:
             // 无参考轨迹：保持当前位置（跟踪自身）。
             ref.push_back(q_current_);
         }
+        ROS_INFO_THROTTLE(1.0, "MPC loop: q0=%.4f ref0=%.4f", q_current_[0],
+                          ref[0][0]);
 
         std::vector<Eigen::VectorXd> u_opt;
         if (!solver_->solve(q_current_, dq_current_, ref, u_opt) ||
@@ -193,6 +200,7 @@ private:
 
     int horizon_ = 10;
     double dt_ = 0.05;
+    double trajectory_timeout_s_ = 2.0;
     Eigen::VectorXd q_current_ = Eigen::VectorXd::Zero(4);
     Eigen::VectorXd dq_current_ = Eigen::VectorXd::Zero(4);
     double gripper_passthrough_ = 0.0;

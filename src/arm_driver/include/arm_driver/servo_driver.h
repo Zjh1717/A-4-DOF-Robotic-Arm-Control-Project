@@ -24,7 +24,8 @@ public:
     ServoDriver(const std::string& port, int baudrate,
                 int read_timeout_ms = 1000,
                 double joint2_offset_deg = kJoint2CodeToUrdfOffsetDeg,
-                int move_speed = 30);
+                int move_speed = 30,
+                double move_deadband_deg = 0.5);
     ~ServoDriver() override;
 
     bool init() override;
@@ -58,9 +59,14 @@ private:
     int read_timeout_ms_;
     double joint2_offset_deg_;
     int move_speed_;
+    double move_deadband_deg_;
     bool connected_ = false;
+    // 上次已下发的目标（代码空间：前 4 关节为度，夹爪为原单位），用于死区判断。
+    std::array<double, kTotalJoints> last_cmd_{};
+    bool has_last_cmd_ = false;
 
-    std::string readReply(int max_bytes = 512);
+    // 读取直到出现 ">>>" 提示符（或超时），返回剥离提示符后的文本。
+    std::string readUntilPrompt(int timeout_ms, bool& prompt_seen);
 };
 
 }  // namespace arm_driver

@@ -107,9 +107,11 @@ int SerialDriver::readAvailable(std::vector<uint8_t>& data, int timeout_ms) {
     if (!isOpen()) {
         return 0;
     }
-    int waited = 0;
+    int total = 0;
+    int idle = 0;
     const int slice_ms = 10;
-    while (waited < timeout_ms) {
+    const int idle_break_ms = 50;
+    while (total < timeout_ms) {
         struct pollfd pfd;
         pfd.fd = fd_;
         pfd.events = POLLIN;
@@ -120,13 +122,18 @@ int SerialDriver::readAvailable(std::vector<uint8_t>& data, int timeout_ms) {
             ssize_t n = ::read(fd_, buf, sizeof(buf));
             if (n > 0) {
                 data.insert(data.end(), buf, buf + n);
-                waited = 0;  // 有新数据则重置空闲计时
+                idle = 0;  // 有新数据则重置空闲计时
             }
         } else if (r == 0) {
-            waited += slice_ms;
+            idle += slice_ms;
+            // 已收到数据且静默一段时间，视为一帧结束，提前返回。
+            if (!data.empty() && idle >= idle_break_ms) {
+                break;
+            }
         } else {
             break;  // 出错或设备关闭
         }
+        total += slice_ms;
     }
     return static_cast<int>(data.size());
 }

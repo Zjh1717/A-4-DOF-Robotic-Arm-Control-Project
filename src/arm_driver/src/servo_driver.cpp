@@ -3,6 +3,7 @@
 #include <ros/ros.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <sstream>
 
@@ -10,12 +11,13 @@ namespace arm_driver {
 
 ServoDriver::ServoDriver(const std::string& port, int baudrate,
                          int read_timeout_ms, double joint2_offset_deg,
-                         int move_speed)
+                         int move_speed, double move_deadband_deg)
     : port_(port),
       baudrate_(baudrate),
       read_timeout_ms_(read_timeout_ms),
       joint2_offset_deg_(joint2_offset_deg),
-      move_speed_(move_speed) {
+      move_speed_(move_speed),
+      move_deadband_deg_(move_deadband_deg) {
     serial_ = std::make_unique<SerialDriver>();
 }
 
@@ -39,13 +41,17 @@ bool ServoDriver::connect() {
         return true;
     }
     if (!serial_->open(port_, baudrate_)) {
+        ROS_WARN("REPL driver: failed to open serial port %s", port_.c_str());
         return false;
     }
     if (!ready()) {
+        ROS_WARN("REPL driver: MicroPython REPL '>>>' handshake failed on %s",
+                 port_.c_str());
         serial_->close();
         return false;
     }
     connected_ = true;
+    ROS_INFO("REPL driver: connected to firmware on %s", port_.c_str());
     return true;
 }
 
@@ -59,7 +65,10 @@ bool ServoDriver::ready(int retry, double delay_s) {
         serial_->writeBytes(crlf);
         // 等待 '>>>' 提示符（等价 python_sdk.py 的 ready()）。
         ros::Duration(delay_s).sleep();
-        std::string reply = readReply();
+        // 注意：readReply() 会剥离 '>>>'，这里必须读原始字节判断提示符。
+        std::vector<uint8_t> data;
+        serial_->readAvailable(data, read_timeout_ms_);
+        std::string reply(data.begin(), data.end());
         if (reply.find(">>>") != std::string::npos) {
             return true;
         }
@@ -79,7 +88,8 @@ bool ServoDriver::sendCmd(const std::string& cmd, bool need_ack,
         return false;
     }
     if (need_ack || reply) {
-        std::string ret = readReply();
+        bool prompt_seen = false;
+        std::string ret = readUntilPrompt(read_timeout_ms_, prompt_seen);
         // 剥离回显的命令文本（等价 python_sdk.py 的 ret.replace(cmd,'')），
         // 避免命令里的数字污染后续数值解析。
         size_t pos = ret.find(cmd);
@@ -93,19 +103,28 @@ bool ServoDriver::sendCmd(const std::string& cmd, bool need_ack,
     return true;
 }
 
-std::string ServoDriver::readReply(int max_bytes) {
-    std::vector<uint8_t> data;
-    serial_->readAvailable(data, read_timeout_ms_);
-    if (static_cast<int>(data.size()) > max_bytes) {
-        data.resize(max_bytes);
+std::string ServoDriver::readUntilPrompt(int timeout_ms, bool& prompt_seen) {
+    prompt_seen = false;
+    std::string acc;
+    int waited = 0;
+    const int slice_ms = 10;
+    while (waited < timeout_ms) {
+        std::vector<uint8_t> data;
+        serial_->readAvailable(data, slice_ms);
+        if (!data.empty()) {
+            acc.append(data.begin(), data.end());
+        }
+        if (acc.find(">>>") != std::string::npos) {
+            prompt_seen = true;
+            break;
+        }
+        waited += slice_ms;
     }
-    std::string text(data.begin(), data.end());
-    // 剥离 '>>>' 提示符（等价 python_sdk.py send_cmd 的处理）。
     size_t pos;
-    while ((pos = text.find(">>>")) != std::string::npos) {
-        text.erase(pos, 3);
+    while ((pos = acc.find(">>>")) != std::string::npos) {
+        acc.erase(pos, 3);
     }
-    return text;
+    return acc;
 }
 
 bool ServoDriver::getJoints(std::array<double, kTotalJoints>& vals_deg) {
@@ -137,7 +156,7 @@ bool ServoDriver::moveJoints(const std::array<int, kTotalJoints>& ids,
                              const std::array<double, kTotalJoints>& vals_deg,
                              int speed) {
     std::ostringstream oss;
-    oss.precision(3);
+    oss.precision(6);
     oss << "arm.bundle.move(ids=[";
     for (int i = 0; i < kTotalJoints; ++i) {
         oss << ids[i] << (i + 1 < kTotalJoints ? "," : "");
@@ -147,7 +166,9 @@ bool ServoDriver::moveJoints(const std::array<int, kTotalJoints>& ids,
         oss << vals_deg[i] << (i + 1 < kTotalJoints ? "," : "");
     }
     oss << "],speed=" << speed << ")";
-    return sendCmd(oss.str(), false, nullptr);
+    // need_ack=true：等待 '>>>'（下位机阻塞执行完才回提示符），
+    // 同时消费回显，避免污染下一次 getJoints 的解析。
+    return sendCmd(oss.str(), true, nullptr);
 }
 
 bool ServoDriver::lockJoints() {
@@ -174,6 +195,27 @@ bool ServoDriver::sendJointCommand(
         vals[i] = code_deg[i];
     }
     vals[kGripperJointId] = target_pos[kGripperJointId];  // 夹爪原单位透传
+
+    // 死区判断：前 4 个运动学关节（度）与夹爪变化都未超过阈值则跳过，避免下发
+    // 固件无法执行的微小指令。
+    if (has_last_cmd_) {
+        bool changed = false;
+        for (int i = 0; i < kKinematicJoints; ++i) {
+            if (std::fabs(vals[i] - last_cmd_[i]) >= move_deadband_deg_) {
+                changed = true;
+                break;
+            }
+        }
+        if (!changed &&
+            std::fabs(vals[kGripperJointId] - last_cmd_[kGripperJointId]) > 1e-6) {
+            changed = true;
+        }
+        if (!changed) {
+            return true;  // 死区内，不重复下发
+        }
+    }
+    last_cmd_ = vals;
+    has_last_cmd_ = true;
     return moveJoints(ids, vals, move_speed_);
 }
 
