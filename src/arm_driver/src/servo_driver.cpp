@@ -61,8 +61,10 @@ bool ServoDriver::ready(int retry, double delay_s) {
     }
     for (int i = 0; i < retry; ++i) {
         serial_->flush();
-        std::vector<uint8_t> crlf = {'\r', '\n'};
-        serial_->writeBytes(crlf);
+        // 先 Ctrl-C 打断可能正在运行的 MicroPython 脚本，再回车请求提示符。
+        // 仅回车无法中断 busy 状态，会一直收不到 '>>>'。
+        serial_->writeBytes({0x03});
+        serial_->writeBytes({'\r', '\n'});
         // 等待 '>>>' 提示符（等价 python_sdk.py 的 ready()）。
         ros::Duration(delay_s).sleep();
         // 注意：readReply() 会剥离 '>>>'，这里必须读原始字节判断提示符。
